@@ -1,0 +1,119 @@
+import lists
+import declassifyutil
+import stdio
+
+let 
+
+    fun checkOneMatch (newProfile, newAgent, newPid, otherProfile, otherAgent, otherPid) =
+        let 
+            val (newLev, newName, _, _, _) = newProfile
+            val (otherLev, otherName, _, _, _) = otherProfile
+
+            val _ = printString("Checking if " ^ newName ^ " and " ^ otherName ^ " like each other")
+
+            (*#--*)
+            (*We use the 'sandbox here for isolation (because untrusted code and for potential issues in the agent*)
+            (*val newAgentResult = sandbox(1000, fn () => newAgent(otherProfile))*)
+
+            val newAgentResult = sandbox(1000, fn () => newAgent(otherProfile))
+
+            val (newLikesOther, newProfileToShare) =
+                case newAgentResult of
+                    (0, result) => result
+                |   _ => (false, ())
+            (*#--*)
+            (*Same here in the other way*)
+            (*val otherAgentResult = sandbox(1000, fn () => otherAgent(newProfile))*)
+            val otherAgentResult = sandbox(1000, fn () => otherAgent(newProfile))
+
+            val (otherLikesNew, otherProfileToShare) =
+                case otherAgentResult of
+                    (0, result) => result
+                | _ => (false, ())
+            (*#--*)
+            (*We need to declassify here because the values have a label for the comparison*)
+            
+            val result =
+            let
+                val resultNew = declassify_with_block(newLikesOther, authority, `{}`)
+                val resultOther = declassify_with_block(otherLikesNew, authority, `{}`)
+            in
+                resultNew andalso resultOther
+            end
+  
+            (*#--*)
+            (*Now we just need to check if there is a match and declassify the information for sending the NEWMATCH reply*)
+            val _ = if result then
+                        let 
+                            val _ = printString("Match found! " ^ newName ^ " and " ^ otherName ^ " like each other")
+                            val _ = let pini authority
+                                        val _ = send(newPid, ("NEWMATCH", otherProfileToShare))
+                                    in
+                                        ()
+                                    end
+                            val _ = let pini authority
+                                        val _ = send(otherPid, ("NEWMATCH", newProfileToShare))
+                                    in
+                                        ()
+                                    end
+                        in 
+                            ()
+                        end
+                    else
+                        let
+                            val _ = printString("No match between " ^ newName ^ " and " ^ otherName)
+                        in
+                            ()
+                        end
+        in
+            ()
+        end
+    (*--------------------------------------------------------------------------------*)
+    fun checkAllMatches(newProfile, newAgent, newPid, profiles) =
+        case profiles of 
+            (*If empty there is nothing to check*)
+            [] => ()
+
+        |   (profile, agent, pid)::rest => 
+                let
+                    val _ = checkOneMatch(newProfile, newAgent, newPid, profile, agent, pid)
+                    val _ = checkAllMatches(newProfile, newAgent, newPid, rest)
+                in
+                    ()
+                end
+    (*--------------------------------------------------------------------------------*)
+    fun serverLoop (allProfiles) =
+        let
+            val _ = printString("Server waiting for new profiles...")
+            val data = receive [ hn ("NEWPROFILE", data) => data]
+            val (profile, agent, pid) = data
+            val (lev, name, year, gender, interests) = profile
+            val _ = printString("New profile received: " ^ name)
+
+            val _ = checkAllMatches(profile, agent, pid, allProfiles)
+            val updatedProfiles = (profile, agent, pid)::allProfiles
+        in
+            serverLoop(updatedProfiles)
+        end        
+
+    (*--------------------------------------------------------------------------------*)
+    (* Our main function starts the server and then requests the
+       dispatcher to send some clients this way. *)
+    fun main () =       
+        let 
+            val thisNode = node (self ())
+            val _ = printString ("Running node with identifier: " ^ thisNode)
+
+            val serverId = spawn (fn () => serverLoop [])
+            val _ = register ("datingServer", serverId, authority)
+
+        in  
+            (* TODO: Feel free to comment out the next line
+                     while you develop your solution and work on a few 
+                     custom clients;  *)
+            send (whereis ("@dispatcher", "dispatcher"), ("DISPATCH", thisNode)); 
+            ()
+        end
+in 
+    main ()
+end
