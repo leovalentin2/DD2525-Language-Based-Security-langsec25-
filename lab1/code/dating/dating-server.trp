@@ -15,20 +15,21 @@ let
             (*We use the 'sandbox here for isolation (because untrusted code and for potential issues in the agent*)
             (*val newAgentResult = sandbox(1000, fn () => newAgent(otherProfile))*)
 
-            val newAgentResult = sandbox(1000, fn () => newAgent(otherProfile))
-
+            (*val newAgentResult = sandbox(1000, fn () => newAgent(otherProfile))*)
+            val newAgentResult = newAgent otherProfile
+            (* val _ = print(newAgentResult) *)
             val (newLikesOther, newProfileToShare) =
                 case newAgentResult of
-                    (0, result) => result
+                    (result) => result
                 |   _ => (false, ())
             (*#--*)
             (*Same here in the other way*)
             (*val otherAgentResult = sandbox(1000, fn () => otherAgent(newProfile))*)
-            val otherAgentResult = sandbox(1000, fn () => otherAgent(newProfile))
+            val otherAgentResult = otherAgent newProfile
 
             val (otherLikesNew, otherProfileToShare) =
                 case otherAgentResult of
-                    (0, result) => result
+                    (result) => result
                 | _ => (false, ())
             (*#--*)
             (*We need to declassify here because the values have a label for the comparison*)
@@ -44,18 +45,18 @@ let
             (*#--*)
             (*Now we just need to check if there is a match and declassify the information for sending the NEWMATCH reply*)
             val _ = if result then
-                        let 
-                            val _ = printString("Match found! " ^ newName ^ " and " ^ otherName ^ " like each other")
-                            val _ = let pini authority
-                                        val _ = send(newPid, ("NEWMATCH", otherProfileToShare))
-                                    in
-                                        ()
-                                    end
-                            val _ = let pini authority
-                                        val _ = send(otherPid, ("NEWMATCH", newProfileToShare))
-                                    in
-                                        ()
-                                    end
+                let 
+                    val _ = printString("Match found! " ^ newName ^ " and " ^ otherName ^ " like each other")
+                    val _ = let pini authority
+                        val _ = send(newPid, ("NEWMATCH", otherProfileToShare))
+                            in
+                                ()
+                            end
+                    val _ = let pini authority
+                        val _ = send(otherPid, ("NEWMATCH", newProfileToShare))
+                            in
+                                ()
+                            end
                         in 
                             ()
                         end

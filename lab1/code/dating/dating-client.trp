@@ -1,4 +1,56 @@
 (* Placeholder for the dating-client. Note that in order to communicate 
    with your server you will need to create the corresponding trustmap *)
+
+import lists
+import declassifyutil
+import stdio
+
+let 
+    (* We define profile info and label it with level 'Alice' *)                                      
+    val level = `{alice}`
+    val profile =
+        (level,                          (* Level of all fields *)
+         "Alice" raisedTo level,         (* Name *)
+         2120 raisedTo level,            (* Year *)
+         true raisedTo level,            (* Gender: true = female *)
+         ["wars", "beer"] raisedTo level)  (* Interests *)
+
+    (* Define function for agent *)
+    fun agent (otherProfile) =
+        let
+            val (oLevel, oName, oYear, oGender, oInterests) = otherProfile
+
+            (* Example criteria: likes profiles with people born before 2100 *)
+            val prefer = oYear < 2104
+
+            (* Declassify result so that it is labeled {oLevel} *)
+            val visibleProfile = 
+                if prefer then
+                    (* share own profile *)
+                    let val p = (level, "Alice", 2102, true, ["wars", "beer"])
+                    in declassify_with_block(p, authority, oLevel) end
+                else ()
+
+        in 
+            (* Must return (bool, profile) labeled at level {oLevel} *)
+            (prefer, visibleProfile)
+        end
+
+    (* Send NEWPROFILE to server *)
+    val server = whereis("@server", "datingServer")
+    val _ = send(server, ("NEWPROFILE", (profile, agent, self())))
+
+    (* Wait for NEWMATCH responses *)
+    fun wait () =
+        let 
+            val msg = receive [ hn ("NEWMATCH", matchProfile) => matchProfile ]
+            val _ = printWithLabels("Got a match!", msg)
+            (* loop again for more matches *)
+        in wait () end
+
+in 
+    wait ()
+end
+
    
 0
